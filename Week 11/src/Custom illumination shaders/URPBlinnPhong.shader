@@ -94,55 +94,64 @@ Shader "CustomURPBlinnPhong"
         }
 
         Pass {
-            Name "ShadowCaster"
-            Tags {"LightMode" = "ShadowCaster"}
-            // Set GPU command to say that this pass doesn't return any colour
-            ColorMask 0
-                
-            HLSLPROGRAM         
-
-            #pragma vertex vert
-            #pragma fragment frag                                         
-
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
-
-            float3 _LightDirection; //Populated by URP
-
-            struct Attributes
-            {
-                float4 positionOS : POSITION;
-                float3 normal : NORMAL;
-            };
-
-            struct Varyings
-            {
-                float4 positionCS  : SV_POSITION;
-
-            };
-                
-            float4 GetShadowPositionHClip(Attributes input){
-                float3 positionWS = TransformObjectToWorld(input.positionOS);
-                float3 normalWS = TransformObjectToWorldNormal(input.normal);
-                float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, _LightDirection));
-                positionCS = ApplyShadowClamping(positionCS);
-                return positionCS;
-            }
-
-            Varyings vert(Attributes IN)
-            {
-                Varyings OUT;
-
-                OUT.positionCS = GetShadowPositionHClip(IN);
-                
-                return OUT;
-            }
-
-            half4 frag(Varyings IN) : SV_TARGET{
-                return 0;
-            }
-
-            ENDHLSL
+            // See: https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@14.0/manual/use-built-in-shader-methods-shadows.html 
+            Name "ShadowCaster" 
+           // In order to cast shadows, a shader has to have a ShadowCaster pass type/tag 
+           // See: https://docs.unity3d.com/6000.2/Documentation/Manual/SL-PassTags.html 
+           Tags {"LightMode" = "ShadowCaster"} 
+           // The ShadowCaster pass is used to render the object into the shadowmap
+           // Set GPU command to say that this pass doesn't return any colour as we render the shadow map not the back buffer
+           ColorMask 0
+               
+           HLSLPROGRAM         
+          
+           #pragma vertex vert
+           #pragma fragment frag                                         
+          
+           #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+           #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+          
+           float3 _LightDirection; //Populated by URP
+          
+           struct Attributes
+           {
+               float4 positionOS : POSITION;
+               float3 normal : NORMAL;
+           };
+          
+           struct Varyings
+           {
+               float4 positionCS  : SV_POSITION;
+               float4 shadowCoords : TEXCOORD3;
+          
+           };
+               
+          
+           Varyings vert(Attributes IN)
+           {
+               // The vertex shader funtion only needs to evaluate the vertex position in clip space for the ShadowCaster
+               // We can use Unity's ApplyShadowClamping function in Shadows.hlsl
+               Varyings OUT;
+          
+               OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+          
+               // Get the VertexPositionInputs for the vertex position  
+               VertexPositionInputs positions = GetVertexPositionInputs(IN.positionOS.xyz);
+          
+               // Convert the vertex position to a position on the shadow map
+               float4 shadowCoordinates = GetShadowCoord(positions);
+          
+               // Pass the shadow coordinates to the fragment shader
+               OUT.shadowCoords = shadowCoordinates;
+          
+               return OUT;
+           }
+          
+           half4 frag(Varyings IN) : SV_TARGET{
+               return 0;
+           }
+          
+           ENDHLSL
 
         }
     }
